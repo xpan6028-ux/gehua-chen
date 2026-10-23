@@ -1,0 +1,13 @@
+{
+  "engine": "fullspec",
+  "data_source": "auto",
+  "outcome": "price",
+  "target": "weight",
+  "candidates": ["mpg", "rep78"],
+  "method": "regress",
+  "vce": {"type": "robust"},
+  "sample_policy": "common",
+  "min_controls": 0,
+  "alpha": 0.05,
+  "max_models": 16
+}

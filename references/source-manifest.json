@@ -1,0 +1,43 @@
+{
+  "video": "https://www.bilibili.com/video/BV1b8BhYMEFx/",
+  "bvid": "BV1b8BhYMEFx",
+  "cid": 26987990223,
+  "duration_seconds": 640,
+  "full_transcript_available": false,
+  "video_audio_fully_reviewed": false,
+  "source_files_inspected_but_not_redistributed": [
+    {
+      "file": "oneclick.ado",
+      "url": "http://fmwww.bc.edu/repec/bocode/o/oneclick.ado",
+      "retrieved_date": "2026-10-23",
+      "bytes": 10682,
+      "sha256": "fbd5fa55b3be12e3364c8ae940544d8b582d964bb3ce8d7ad2a938d716c85a80",
+      "normalized_lines_python_universal_newlines": 377
+    },
+    {
+      "file": "oneclick.sthlp",
+      "url": "http://fmwww.bc.edu/repec/bocode/o/oneclick.sthlp",
+      "retrieved_date": "2026-10-23",
+      "bytes": 10200,
+      "sha256": "fdd96c88b1aa689ef1f290a79e8766e3583e9b54377cca42b5922f02709512f8",
+      "normalized_lines_python_universal_newlines": 320
+    },
+    {
+      "file": "oneclick.pkg",
+      "url": "http://fmwww.bc.edu/repec/bocode/o/oneclick.pkg",
+      "retrieved_date": "2026-10-23",
+      "bytes": 805,
+      "sha256": "657ab8bd73c8e09236ab5c0badcaadb22680e61947eb401c1c146831777c9f74",
+      "normalized_lines_python_universal_newlines": 22
+    }
+  ],
+  "stata_execution_verified": true,
+  "stata_verification": {
+    "date": "2026-10-23",
+    "version": "18",
+    "flavor": "IC",
+    "data": "auto and fixed-seed synthetic data only",
+    "integration_tests": 14,
+    "report": "tests/report.md"
+  }
+}

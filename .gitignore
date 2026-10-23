@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+runs/
+*.dta
+*.csv
+*.log
+*.smcl
+*.zip
+Thumbs.db
+.DS_Store

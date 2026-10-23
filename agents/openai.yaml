@@ -1,0 +1,4 @@
+interface:
+  display_name: "gehua Chen"
+  short_description: "讲解OneClick并隔离运行Stata，支持保留全部规格、实际p值与失败记录"
+  default_prompt: "请使用 $gehua-chen，核对我的模型与版本，选择原版或全规格扩展，先生成可检查的计划，再按任务运行并核验结果。"
