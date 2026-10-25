@@ -76,26 +76,29 @@ def stata_path(path):
     return value
 
 
-def validate(raw, base=None):
+def validate(raw, base=None, require_data=True):
     if not isinstance(raw, dict) or set(raw) - KEYS:
         raise ValueError(f"unknown configuration keys: {sorted(set(raw) - KEYS) if isinstance(raw, dict) else 'not object'}")
     c = dict(raw)
     c.setdefault("engine", "fullspec")
     if not isinstance(c["engine"], str) or c["engine"] not in {"fullspec", "oneclick"}:
         raise ValueError("engine must be fullspec or oneclick")
-    if ("data_path" in c) == ("data_source" in c):
-        raise ValueError("provide exactly one of data_path or data_source")
+    data_fields = int("data_path" in c) + int("data_source" in c)
+    if data_fields > 1 or (require_data and data_fields != 1):
+        raise ValueError("run requires exactly one of data_path or data_source; plan may leave both unspecified")
     if "data_source" in c and c["data_source"] != "auto":
         raise ValueError("the only bundled data_source is auto")
     if "data_path" in c:
         if not isinstance(c["data_path"], str):
             raise ValueError("data_path must be a file path string")
-        p = Path(c["data_path"])
+        p = Path(c["data_path"]).expanduser()
         if not p.is_absolute():
             p = (base or Path.cwd()) / p
-        p = p.resolve(strict=True)
-        if not p.is_file() or p.suffix.lower() != ".dta":
-            raise ValueError("data_path must be a local .dta file")
+        p = p.resolve(strict=require_data)
+        if p.suffix.lower() != ".dta" or (p.exists() and not p.is_file()):
+            raise ValueError("data_path must name a local .dta file")
+        if require_data and not p.is_file():
+            raise ValueError("run requires an existing local .dta file")
         stata_path(p)
         c["data_path"] = str(p)
     name(c.get("outcome"), "outcome")
@@ -208,7 +211,9 @@ def plan(c):
 
 def find_stata(explicit=None):
     if explicit or os.environ.get("STATA_EXE"):
-        p = Path(explicit or os.environ["STATA_EXE"]).resolve(strict=True)
+        requested = str(explicit or os.environ["STATA_EXE"])
+        on_path = shutil.which(requested)
+        p = Path(on_path or requested).expanduser().resolve(strict=True)
         if not p.is_file():
             raise ValueError("Stata executable is not a file")
         return p
@@ -239,14 +244,20 @@ def find_stata(explicit=None):
     raise ValueError("Stata not found; pass --stata with the licensed executable path")
 
 
-def render_do(c, specs, ado_dir=None):
-    lines = ["version 14", "set more off", "set varabbrev off", "capture program drop oc_job", "program define oc_job"]
+def render_do(c, specs, ado_dir=None, run_directory=None):
+    lines = ["version 14", "set more off", "set varabbrev off"]
+    if run_directory is not None:
+        lines.append(f'cd "{stata_path(run_directory)}"')
+    lines += ["capture program drop oc_job", "program define oc_job"]
     if ado_dir:
         lines.append(f'    adopath ++ "{stata_path(ado_dir)}"')
     if "data_path" in c:
         lines.append(f'    use "{stata_path(c["data_path"])}", clear')
-    else:
+    elif c.get("data_source") == "auto":
         lines.append("    sysuse auto, clear")
+    else:
+        lines += ['    display as error "Plan only: provide data_path or data_source before running"',
+                  "    exit 601"]
     numeric = {c["outcome"], c["target"], *c["candidates"],
                *(TERM.fullmatch(v).group(1) for v in c["fixed_controls"])}
     extra = set(c["fixed_effects"])
@@ -339,18 +350,26 @@ def verify_output(c, specs, directory):
 
 
 def run(config_path, output_root, execute=False, stata=None, ado_dir=None, timeout=300):
-    config_path = Path(config_path).resolve(strict=True)
-    c = validate(json.loads(config_path.read_text(encoding="utf-8-sig")), config_path.parent)
+    config_path = Path(config_path).expanduser().resolve(strict=True)
+    c = validate(json.loads(config_path.read_text(encoding="utf-8-sig")), config_path.parent,
+                 require_data=execute)
     specs = plan(c)
     ado = None
     if c["engine"] == "oneclick":
-        if not ado_dir:
+        if execute and not ado_dir:
             raise ValueError("original engine requires --ado-dir containing the verified OneClick 6.0 source")
-        ado = Path(ado_dir).resolve(strict=True)
-        if sha256(ado / "oneclick.ado") != PINNED_ADO:
+        if ado_dir:
+            ado = Path(ado_dir).expanduser()
+            if not ado.is_absolute():
+                ado = config_path.parent / ado
+            ado = ado.resolve(strict=execute)
+        if execute and sha256(ado / "oneclick.ado") != PINNED_ADO:
             raise ValueError("oneclick.ado differs from the pinned source; review the version before running")
     exe = find_stata(stata) if execute else None
-    root = Path(output_root).resolve()
+    root = Path(output_root).expanduser()
+    if not root.is_absolute():
+        root = config_path.parent / root
+    root = root.resolve()
     stata_path(root)
     root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -358,14 +377,18 @@ def run(config_path, output_root, execute=False, stata=None, ado_dir=None, timeo
     directory.mkdir(exist_ok=False)
     (directory / "config.json").write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
     (directory / "plan.json").write_text(json.dumps(specs, ensure_ascii=False, indent=2), encoding="utf-8")
-    (directory / "job.do").write_text(render_do(c, specs, ado), encoding="utf-8")
-    original_hash = sha256(c["data_path"]) if "data_path" in c else None
+    (directory / "job.do").write_text(render_do(c, specs, ado, directory), encoding="utf-8")
+    original_hash = sha256(c["data_path"]) if execute and "data_path" in c else None
     manifest = {"state": "planned", "executed_stata": False, "engine": c["engine"],
                 "planned_models": len(specs), "includes_empty": c["min_controls"] == 0,
                 "sample_policy": c["sample_policy"], "input_sha256": original_hash,
-                "original_combination_slots": 2 ** len(c["candidates"]) if ado else None,
-                "oneclick_sha256": PINNED_ADO if ado else None,
-                "collector_sha256": sha256(SKILL / "assets" / "oc_collect.ado"),
+                "original_combination_slots": 2 ** len(c["candidates"]) if c["engine"] == "oneclick" else None,
+                "oneclick_sha256": PINNED_ADO if execute and ado else None,
+                "oneclick_expected_sha256": PINNED_ADO if c["engine"] == "oneclick" else None,
+                "collector_sha256": sha256(SKILL / "assets" / "oc_collect.ado") if c["engine"] == "fullspec" else None,
+                "execution_environment_checked": execute,
+                "data_configured": "data_path" in c or "data_source" in c,
+                "planning_note": None if execute else "Plan only: data contents, Stata, license and estimator dependencies were not checked; run performs its own preflight.",
                 "job_sha256": sha256(directory / "job.do"), "output_directory": str(directory)}
 
     def save():
@@ -374,7 +397,8 @@ def run(config_path, output_root, execute=False, stata=None, ado_dir=None, timeo
     save()
     if not execute:
         return manifest
-    launch = [str(exe), "/e", "/q", "do", "job.do"] if os.name == "nt" else [str(exe), "-b", "do", "job.do"]
+    job_path = str(directory / "job.do")
+    launch = [str(exe), "/e", "/q", "do", job_path] if os.name == "nt" else [str(exe), "-b", "do", job_path]
     kwargs = {}
     if os.name == "nt":
         startup = subprocess.STARTUPINFO()

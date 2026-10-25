@@ -1,16 +1,19 @@
 # 命令示例与迁移方法
 
-以下为接口示例，未在当前机器的Stata中执行；不包含虚构的回归结果。估计前先检查研究设计和数据，执行规范见 [workflow.md](workflow.md)。教学数据示例集中在 [demo_auto.do](../assets/demo_auto.do)。
+以下只展示**作者原版OneClick**的接口，不是fullspec指令，也不是当前任务的执行结果。普通组合比较先按[执行说明](execution.md)选fullspec，无需安装OneClick。下列示意中的变量名须替换，sysuse/clear仅在独立教学会话使用；不要为了讲解而运行或清空用户现有会话。
+
+示例用Stata的tempfile生成绝对临时输出路径，不依赖cwd，也不覆盖固定同名结果。正式交付应改为用户项目中新建输出目录的绝对路径；临时文件不作持久产物。执行规范见[workflow.md](workflow.md)，原版教学文件见[demo_auto.do](../assets/demo_auto.do)。
 
 ## OLS：分清候选项与固定项
 
 ```stata
 sysuse auto, clear
 keep if !missing(price, weight, mpg, rep78)
+tempfile result
 
 oneclick price mpg rep78, method(regress) pvalue(.05) ///
     fixvar(weight) options(vce(robust)) threshold(1) ///
-    full saveplace("run01_ols.dta")
+    full saveplace("`result'")
 ```
 
 解释：price是y；weight是每次保留且被检验的x；mpg和rep78参与组合；至少保留1个候选。此例为了便于比较先限定共同完整样本，并不表示所有研究都应按整池变量做完整案例删除。
@@ -20,10 +23,11 @@ oneclick price mpg rep78, method(regress) pvalue(.05) ///
 ## 固定保留部分变量
 
 ```stata
+tempfile result
 oneclick y c1 c2 c3, method(regress) pvalue(.05) ///
     fixvar(x required_control i.year) ///
     options(vce(cluster firm_id)) threshold(2) ///
-    saveplace("run02_fixed.dta")
+    saveplace("`result'")
 ```
 
 此例中的名称是角色示意，须替换成用户真实变量。`required_control`与年份项始终保留，`threshold(2)`只计算c1、c2、c3。聚类维度应由研究设计确定，不能把firm_id这个示意名称当作普遍答案。
@@ -32,10 +36,11 @@ oneclick y c1 c2 c3, method(regress) pvalue(.05) ///
 
 ```stata
 xtset firm_id year
+tempfile result
 oneclick y c1 c2 c3, method(xtreg) pvalue(.05) ///
     fixvar(x required_control i.year) ///
     options(fe vce(cluster firm_id)) threshold(2) ///
-    full saveplace("run03_xtfe.dta")
+    full saveplace("`result'")
 ```
 
 先检查面板键唯一性和基准回归。不要因为见到`xtreg`便自动加`zvalue`：固定效应与随机效应的推断结果应分别核对。
@@ -43,10 +48,11 @@ oneclick y c1 c2 c3, method(xtreg) pvalue(.05) ///
 ## reghdfe多维固定效应
 
 ```stata
+tempfile result
 oneclick y c1 c2 c3, method(reghdfe) pvalue(.05) ///
     fixvar(x required_control) ///
     options(absorb(firm_id year) vce(cluster firm_id)) ///
-    threshold(2) full saveplace("run04_hdfe.dta")
+    threshold(2) full saveplace("`result'")
 ```
 
 吸收项放到`options(absorb(...))`，避免把大量虚拟变量视为待筛候选。检查reghdfe和依赖包已安装；数据中需要的组内变异、自由度与聚类条件仍由实际模型决定。
@@ -56,8 +62,9 @@ oneclick y c1 c2 c3, method(reghdfe) pvalue(.05) ///
 ```stata
 sysuse auto, clear
 keep if !missing(foreign, weight, mpg, rep78)
+tempfile result
 oneclick foreign mpg rep78, method(logit) pvalue(.05) ///
-    fixvar(weight) zvalue full saveplace("run05_logit.dta")
+    fixvar(weight) zvalue full saveplace("`result'")
 ```
 
 logit/probit相关估计失败、完全预测或缺失拟合度需要按实际输出检查。`best`依赖源码所取的`e(r2)`，不能假定这些模型具有可用且合适的这一字段，所以此例不启用`best`。

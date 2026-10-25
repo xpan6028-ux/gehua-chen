@@ -39,5 +39,12 @@
     "data": "auto and fixed-seed synthetic data only",
     "integration_tests": 14,
     "report": "tests/report.md"
+  },
+  "last_validation_date": "2026-10-25",
+  "test_counts": {
+    "model_budget": 5,
+    "runner": 9,
+    "portability": 9,
+    "actual_stata_integration": 14
   }
 }

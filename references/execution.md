@@ -1,6 +1,6 @@
 # 隔离运行与全规格扩展
 
-本文件对应 `scripts/stata_runner.py`、`assets/oc_collect.ado`。它们是本技能新增工具，不属于作者 OneClick。需要真实的 Python 3.9+、可调用的 Stata 及相应估计器；不使用 Python 模拟回归结果。Windows Stata 18 已实际测试，其他系统的批处理分支尚未实测。
+本文件对应技能根目录中的`scripts/stata_runner.py`与`assets/oc_collect.ado`，均为本技能扩展，不属于作者OneClick。只讲解或写代码不需要这些运行依赖；调用`plan`仅需Python3.9+；调用`run`才需要当前宿主有文件/进程能力、实际数据、可用Stata与相应估计器。Windows Stata18已实测，其他系统分支尚未实测。
 
 ## 选择入口
 
@@ -11,31 +11,34 @@
 
 根据任务选择入口。用户要全部规格时选 `fullspec`，不要把原版 `full` 选项当作这一功能。
 
-## 教学数据的实际调用
+## 路径解析：适用于不同AI宿主
 
-先找到可用解释器；Windows裸 `python` 可能是商店占位符。以下 `$pythonExe` 应指向已经确认可用的Python，`$skillDir` 指向安装目录：
+1. 从当前宿主读取`SKILL.md`返回的实际绝对路径取其父目录，作为技能根目录。若宿主给了注册目录则直接核对其中的`SKILL.md`。不要用当前工作目录、`~/.codex`或某个豆包目录代替这个实际位置。只有文档文字、没有磁盘位置时，先明确缺少的路径；不要假装已安装。
+2. 从当前工具提供的运行时或PATH确认真实Python3.9+，记录其`sys.executable`绝对路径。Windows商店占位符不算可用解释器。检查失败时可检查一个明确的替代运行时，仍不可用就交付文字计划或do；不全盘搜索/循环重装环境。
+3. 拼出根目录下`scripts/stata_runner.py`及配置文件的绝对路径。输出根目录取用户指定位置，或在已授权的项目目录中新建明确的结果目录，然后也转绝对路径。外部数据尽量在JSON中填绝对`data_path`。
+4. 调用形式是“Python绝对路径、入口脚本绝对路径、动作plan/run、配置绝对路径、--output-root、输出绝对路径”。使用工具支持的参数数组；必须经shell时正确引用带空格/中文的路径。AI呈现给用户的最终命令应是本机已解析值，不能原样复制占位符或未定义变量。
 
-```powershell
-$skillDir = Join-Path $env:USERPROFILE '.codex\skills\gehua-chen'
-& $pythonExe "$skillDir\scripts\stata_runner.py" plan "$skillDir\assets\fullspec_auto.json" --output-root '.\oneclick-runs'
-& $pythonExe "$skillDir\scripts\stata_runner.py" run "$skillDir\assets\fullspec_auto.json" --output-root '.\oneclick-runs'
-```
+脚本用自身`__file__`定位内部资源；生成的`job.do`包含运行目录的绝对`cd`，启动Stata也使用该do的绝对路径。目录结构中的相对名称用于说明文件位置，不代表要求调用方先切换工作目录。
 
-可用 `--stata` 指定实际可执行文件路径；未指定时，执行器查 `STATA_EXE`、PATH及Windows卸载注册表。程序名含MP不证明实际许可类型，以输出 `c(flavor)` 为准。`plan`只生成配置、命令计划和do文件，不启动Stata；`run`生成一个新的运行目录后执行。可先查看计划，再对同一配置运行；两次会产生不同目录。
+Windows还提供[run_demo.ps1](../scripts/run_demo.ps1)，入口自身通过`$PSScriptRoot`定位技能，参数为`-Action plan/run`、必填的绝对`-OutputRoot`、可选绝对`-PythonExe`、可选`-Stata`和超时。没有显式Python时仅检查PATH上的python/python3/py，不假定某家AI的私有安装目录；检查失败就明确退出。AI应使用该ps1的实际绝对路径调用。若宿主不允许运行ps1，直接用上面的Python入口，不改变系统执行策略。人类用户安装后可复制运行的完整示例见[README](../README.md)。
+
+`--stata`可给实际可执行文件路径或PATH上的命令名；未指定时查`STATA_EXE`、PATH及Windows卸载注册表。程序名含MP不证明实际许可类型，以`c(flavor)`为准。Python与Stata可以在不同目录。能导入技能、能在云沙箱运行Python，都不证明能访问用户电脑的Stata。
+
+`plan`只生成配置、计划与do，不启动Stata，不检查许可/估计器，不读取DTA内容或强制要求DTA已存在。用户只要变量组合时，不因未提供数据而卡住。`run`重新检查数据和环境；计划成功不是执行前置条件已通过的证明。用户已要求运行时，可以直接调用run，不必先另起一次plan或请求重复确认。
 
 `fullspec_auto.json`：price为y，weight为目标x，mpg/rep78为候选，稳健标准误、共同完整案例样本。计划4条：无候选、仅mpg、仅rep78、两者都有。“无候选”仍包含目标x、固定控制项和默认截距。
 
-原版入口需在配置中设置 `engine: "oneclick"`、`min_controls: 1`，删除 `max_controls` 等扩展专用参数。执行时额外传：
+原版入口在配置中设置`engine: "oneclick"`、`min_controls: 1`，不传`max_controls`等扩展专用字段。原版**run**额外需要`--ado-dir`指向已核验源码目录的绝对路径；原版**plan**不需要这个目录，也不要求安装OneClick。fullspec的plan/run均不需要OneClick。
 
-```powershell
---ado-dir '保存官方oneclick.ado的目录'
-```
-
-只接受 [来源清单](source-manifest.json) 已核验字节的OneClick 6.0；哈希不同先复核版本。本工具不下载或安装命令、不修改个人ado目录。原版 `threshold` 至少1，故本入口不会调用原版的空组合估计。原版还会分配全部 `2^k` 组合位置，单独受 `max_original_slots` 限制。
+此包装器的原版run只接受[来源清单](source-manifest.json)已核验字节的6.0。`ssc install`可供用户直接在Stata使用，但“全局已安装”不能自动满足包装器的固定哈希ado目录条件；不要在两种安装方式之间无限重试。版本不符时说明差异并停止该入口，或按用户实际版本交付独立命令。源码目录必须能从当前Stata进程访问；不自动下载安装。原版至少两个候选且`min_controls>=1`，仍分配全部`2^k`组合位置，由`max_original_slots`另行限制。
 
 ## JSON配置
 
-使用用户授权的数据文件、变量角色与基准模型，不从磁盘随意挑数据运行。相对 `data_path` 以JSON文件所在目录解析。文件必须是本地 `.dta`；与 `data_source: "auto"` 二选一。未开放任意Stata代码、自由文本options、if/in、权重或数据清洗命令，需要这些时在独立do中明确实现和验证。
+使用用户授权的文件、变量角色与基准模型。run要求`data_path`与`data_source: "auto"`二选一；前者须以`.dta`结尾并且存在可读。plan允许路径指向尚未提供的DTA，也允许两个数据字段均不填：只生成组合计划，并在do中明确缺少数据，不能偷偷改用auto示例代替用户研究。输入为Excel/CSV时不把它改扩展名冒充DTA；说明需要在工作副本中显式转换，或交付转换代码。实际运行不从磁盘随意挑数据。
+
+入口的配置文件参数应给绝对路径。为兼容手工调用，配置内相对`data_path`、相对`--output-root`及相对`--ado-dir`统一按**配置文件所在目录**解析，`~`按用户目录展开；不依赖启动时cwd。AI命令仍优先全部使用绝对路径，避免宿主改变目录。没有输出时不要默认写进安装目录或只读技能目录。
+
+JSON接口未开放任意代码、自由options、if/in、权重或数据清洗命令。这是包装器边界，不代表Stata或本技能完全不能协助这些研究；有这类任务时按原模型交付独立do或说明尚缺哪项执行支持，不删除设定后强行套JSON。
 
 | 字段 | 取值与含义 |
 | --- | --- |
@@ -63,7 +66,7 @@ $skillDir = Join-Path $env:USERPROFILE '.codex\skills\gehua-chen'
 ```json
 {
   "engine": "fullspec",
-  "data_path": "panel.dta",
+  "data_path": "/research/project/data/panel.dta",
   "outcome": "y",
   "target": "x",
   "candidates": ["c1", "c2"],
@@ -78,6 +81,8 @@ $skillDir = Join-Path $env:USERPROFILE '.codex\skills\gehua-chen'
   "max_models": 16
 }
 ```
+
+上例为配置结构示意，路径和变量名不是用户真实数据；生成用户配置时必须替换为当前环境中的实际绝对路径（Windows使用其盘符路径），不能把示意路径直接用于执行。
 
 ## 输出与完成判定
 

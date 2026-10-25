@@ -1,87 +1,69 @@
 # gehua Chen
 
-一个帮你使用 **Stata OneClick 6.0** 和比较回归结果的 Codex Skill。技能调用名为 **`$gehua-chen`**，界面显示名为 **gehua Chen**。
+帮助AI按用户给定的基准模型，组合候选控制变量、生成Stata代码、按条件运行回归并解释完整结果。技能名称为`gehua-chen`，在Codex中可用`$gehua-chen`调用。
 
-你提供数据、研究问题和基准模型，它帮助写代码、调用本机Stata、整理结果，并解释不同控制变量组合下的变化。Stata原命令仍叫 `oneclick`；本项目不是OneClick作者的官方项目。
+例如，3个候选变量有8种组合，8个有256种。受检验变量和必须保留的控制项始终保留；候选组合可限制最少/最多数量。默认的`fullspec`模式逐条记录成功、不显著、估计失败和目标变量被省略的情况，输出系数、SE、实际p值、N及状态。
 
-## 主要功能
+本技能也提供作者OneClick6.0的讲解、迁移和排错。只有用户明确要原版时才采用`oneclick`入口；原版按显著性筛选，原版`full`选项不等于完整记录模式。本项目不是OneClick作者的官方项目。
 
-- 解释OneClick的变量角色、参数、输出和版本差异。
-- 根据明确的基准模型生成代码，配置固定效应、稳健/聚类标准误和样本策略。
-- 在独立Stata会话中执行，保存命令计划、do文件、日志、DTA/CSV及完成状态，不写回输入数据。
-- 用新增的 `fullspec` 模式记录所有计划规格，包括不显著、估计失败和目标系数被省略的情况。
-- 记录目标系数、标准误、实际双侧p值、样本量、自由度、95%区间和失败状态。
-- 在运行前检查组合预算，识别超时、未完成输出和变量名错误。
+## 按需求使用，不把所有依赖混在一起
 
-**两种模式要区分：** `oneclick` 调用作者原版，输出仍是筛选后的显著非空组合；`fullspec` 是本项目独立扩展，保留全部计划规格。原版的 `full` 选项只改输出形式，不等于全规格模式。
+| 需求 | 需要什么 | 可以交付什么 |
+| --- | --- | --- |
+| 讲解、比较已有表格/日志 | 对应问题和材料即可 | 解释、核查依据及候选原因；不需要Python或Stata |
+| 组合计数、计划、代码 | 已明确的变量角色和模型要求 | 组合计划或do；数据尚未提供也可先做。运行plan脚本仅需Python3.9+ |
+| 实际运行 | 当前工具有文件/进程能力、实际数据、可调用Stata及相应估计器 | 新输出目录、代码、日志、DTA/CSV及核验状态 |
 
-## 安装与调用
+生成计划不要求Stata已安装，也不要求OneClick源码目录。fullspec的运行不依赖OneClick；原版包装器的run才需固定哈希的源码目录。仅要计划时不运行；已要求运行且条件齐备时，检查后继续，无需重复询问是否运行。
 
-将本仓库完整放入 Codex 的技能目录，文件夹名为 `gehua-chen`。默认路径是 `~/.codex/skills/gehua-chen`；自定义 `CODEX_HOME` 时使用其 `skills` 目录。
+## 安装与工具适配
 
-Windows默认目录可用：
+把本仓库完整放进当前AI工具支持的技能目录。**不同工具目录不同**；运行时应从工具读取本`SKILL.md`时给出的实际绝对位置定位资源，不能假定当前目录就是技能目录，也不能把Codex目录套给豆包或其他工具。只获得本文文字而没有技能文件时，可参考说明，但无法据此声称已安装脚本。
 
-```powershell
-git clone https://github.com/xpan6028-ux/gehua-chen.git "$env:USERPROFILE\.codex\skills\gehua-chen"
-```
-
-目标目录需尚不存在。安装后，在Codex中调用：
-
-> 请使用 $gehua-chen，帮我检查这条基准回归，说明哪些变量固定保留、哪些作为候选，并生成全规格比较计划。
-
-也可以提出具体任务：
-
-> 请使用 $gehua-chen，用Stata自带auto数据，price为因变量，weight为受检验变量，mpg和rep78为候选控制变量，使用稳健标准误。保留全部规格，包括不显著和失败的规格，运行后解释结果。
-
-本机开发安装已由旧名迁移为 `gehua-chen`，今后使用新调用名。通过Git克隆安装的副本，可以在该目录运行 `git pull --ff-only` 更新。
-
-## 运行条件与教学示例
-
-命令解释与代码生成不要求本机能启动Stata；**实际回归需要可调用、具有有效许可的Stata及相应估计命令**，本仓库不包含Stata、许可文件或第三方估计器。
-
-执行器使用Python标准库，需要Python3.9+。Windows中的 `python` 可能是商店占位符，应使用真实解释器。以下命令中的 `python` 指已经确认可用的Python：
+以下是**Windows上安装到Codex**的完整示例，目标目录需尚不存在。该代码块同时定义安装位置、入口及输出位置，生成教学计划，不运行Stata：
 
 ```powershell
-python scripts/stata_runner.py plan assets/fullspec_auto.json --output-root ./runs
-python scripts/stata_runner.py run assets/fullspec_auto.json --output-root ./runs
+$skillInstallBase = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$skillRoot = [IO.Path]::GetFullPath((Join-Path $skillInstallBase 'skills/gehua-chen'))
+if (Test-Path -LiteralPath $skillRoot) { throw '目标已存在，请使用已有目录，不要覆盖安装。' }
+git clone https://github.com/xpan6028-ux/gehua-chen.git $skillRoot
+if ($LASTEXITCODE -ne 0) { throw '下载未完成。' }
+$demoEntry = Join-Path $skillRoot 'scripts/run_demo.ps1'
+$demoOutput = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE 'gehua-chen-runs'))
+& $demoEntry -Action plan -OutputRoot $demoOutput
 ```
 
-未指定Stata位置时会尝试查找，也可加 `--stata "实际Stata可执行文件路径"`。计划包含4个规格；每次执行创建独立目录。`plan`不运行Stata，`run`才启动回归。
+PowerShell演示入口按自身位置寻找Python脚本和教学配置，因而不要求先cd到技能目录。它检查PATH上的Python3.9+；若当前工具提供另一个Python运行时，给`-PythonExe`传其已核验的绝对路径即可。没有可用Python时会明确退出，不自动安装。实际回归把Action改成run；必要时用Stata参数给实际可执行文件路径。其他系统或AI工具可直接使用Python入口，路径规则见[执行说明](references/execution.md)。
 
-`fullspec`不依赖OneClick安装。原版入口另外要求 `--ado-dir` 指向已核验的OneClick6.0源文件目录，版本由SHA-256核对；文件来源见[来源登记](references/sources.md)。执行器不会全局安装命令。
+通过Git克隆安装的副本，可在其实际目录用`git -C`配合该绝对目录执行`pull --ff-only`更新。其他导入方式按其宿主管理方式更新，不把普通导入目录当作Git仓库。
 
-详细配置、模型预算、数据路径、样本政策、输出字段和完成判定见[执行说明](references/execution.md)。
+## 直接提出任务
 
-## 已验证范围
+> 请使用gehua-chen。我有因变量y、核心变量x和候选a/b/c，今天只生成全部组合计划，数据以后再提供，不运行Stata。
 
-Windows Stata18已实际运行验证：OLS、Logit、Probit、`xtreg, fe`、`reghdfe`和相应稳健/聚类标准误。28项测试通过，其中14项为实际启动Stata的集成测试；数据仅为auto与固定种子合成数据，未使用用户研究数据。更名后重新验证的记录见[测试报告](references/tests/report.md)。
+> 请使用gehua-chen。按照我提供的基准回归运行候选控制变量组合，必须保留项、固定效应和标准误按原模型设置。保留所有计划规格，解释系数与样本量的变化，并给出本次代码、结果和日志位置。
 
-无需Stata的测试：
+> 请使用gehua-chen。使用Stata自带auto数据，price为y、weight为x、mpg和rep78为候选、稳健标准误，用完整记录模式实际运行并解释4种组合。
 
-```powershell
-python references/tests/test_model_budget.py
-python references/tests/test_stata_runner.py
-```
+Codex中可用`$gehua-chen`选择技能；其他宿主以其实际技能选择方式为准，不保证同样的美元调用语法。
 
-实际Stata测试需设置 `STATA_EXE`；原版测试另需 `ONECLICK_ADO_DIR`，可用 `STATA_TEST_ROOT` 指定产物目录：
+## 执行入口与文件
 
-```powershell
-python references/tests/test_stata_integration.py
-```
-
-## 使用边界与来源
-
-- 控制变量是否应该纳入仍取决于研究问题和识别设计，不能仅凭显著性判断；本技能不保证显著或替代因果识别。
-- 自动运行接口暂不支持任意估计器、权重、自由options、if/in或复杂交互/时序目标；xtreg RE和其他操作系统分支未经过本轮运行验收。
-- 共同完整案例输入池不保证各估计器最终使用同一批观测；须检查实际样本字段。
-- 尚未自动生成规格曲线和投稿用论文表格。
-- 本项目依据指定[B站视频页面](https://www.bilibili.com/video/BV1b8BhYMEFx/)与作者正式帮助/源码整理，没有取得完整音轨转写，不能称为视频逐句复刻。
-
-OneClick作者为Shutter Zor（左祥太）；正式软件见[作者网站](https://shutterzor.cn/stata/)及[SSC/RePEc条目](https://ideas.repec.org/c/boc/bocode/s459075.html)。原版软件的GPLv3说明与作者权利不因本技能名称而改变。本仓库不重新分发作者完整源码或帮助文件；新增执行器与原版软件的区别已在技能资料中注明。
-
-## 文件入口
-
-- [SKILL.md](SKILL.md)：技能指令与按需资料索引。
-- [执行器](scripts/stata_runner.py)：计划、隔离执行和产物核验。
-- [全规格收集器](assets/oc_collect.ado)：逐条估计及统计量/状态收集。
+- [SKILL.md](SKILL.md)：用途、路由和前置条件。
+- [stata_runner.py](scripts/stata_runner.py)：plan/run入口，内部资源按脚本自身位置解析。
+- [run_demo.ps1](scripts/run_demo.ps1)：Windows教学入口，输出根目录必须是绝对路径。
+- [fullspec_auto.json](assets/fullspec_auto.json)：4规格教学配置。
+- [执行说明](references/execution.md)：配置字段、路径规则、依赖与停止条件。
 - [能力范围](references/capabilities.md)、[来源登记](references/sources.md)、[测试报告](references/tests/report.md)。
+
+AI生成实际命令时，应先核验Python、入口、JSON和输出位置，再填入真实绝对路径；不要把相对文件名、尚未定义的变量或示意路径原样交给shell。输入DTA、输出和ado目录的相对参数为兼容手工使用，统一相对配置文件目录；AI执行优先用绝对路径。
+
+## 验证与边界
+
+已在Windows Stata18使用auto与固定种子合成数据验证OLS、Logit/Probit、xtreg FE、reghdfe及稳健/聚类标准误。新增验证覆盖任意启动目录、迁移安装位置、无数据/无Stata的plan、原版plan不依赖ado，以及独立PowerShell演示入口。完整记录见[测试报告](references/tests/report.md)，不把这些结果当作其他宿主已适配或用户研究数据已验收。
+
+无需Stata的测试入口：[组合预算](references/tests/test_model_budget.py)、[参数与结果检查](references/tests/test_stata_runner.py)、[路径与依赖分支](references/tests/test_portability.py)。AI测试时同样从技能实际根目录生成这些文件的绝对路径。原生Stata集成测试见[集成测试](references/tests/test_stata_integration.py)，需要显式设置STATA_EXE，原版场景另需ONECLICK_ADO_DIR；缺少它们时测试会跳过，跳过不能说成已通过原生回归验证。
+
+JSON包装器暂不支持权重、任意options、if/in或复杂交互/时序目标；遇到这些要求可以按原模型另写do，而不是删掉设定强行套包装器。共同完整案例输入池也不保证所有估计器最终使用相同观测，应检查实际样本字段。变量合理性与因果识别仍依赖研究设计，不保证显著。xtreg RE和其他系统批处理尚未经过本轮验收。
+
+OneClick作者为Shutter Zor（左祥太），来源为[作者网站](https://shutterzor.cn/stata/)与[SSC/RePEc条目](https://ideas.repec.org/c/boc/bocode/s459075.html)。原版软件的GPLv3声明不因本技能名称而改变。本仓库不重新分发作者完整源码或帮助；视频未取得完整转录，技能使用也不要求先下载或观看视频。
